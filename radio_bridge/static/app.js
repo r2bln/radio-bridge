@@ -79,6 +79,7 @@ async function setupAudio() {
   st.capture.connect(sink).connect(st.ctx.destination);
   st.capture.port.onmessage = (e) => {
     meter("txbar", "txval", e.data.dbfs);
+    micHealth(e.data);
     if (st.pressed && st.ws && st.ws.readyState === WebSocket.OPEN && (st.tx === "wake" || st.tx === "voice")) {
       st.ws.send(e.data.frame);
     }
@@ -92,6 +93,19 @@ async function setupAudio() {
 
   await openMic();
   await listMics();
+}
+
+// Окно 50 кадров (1 с): цифровая тишина = микрофон отвалился, частый клиппинг = убавить уровень.
+const mh = { zero: 0, clip: 0, n: 0 };
+function micHealth(d) {
+  mh.zero += d.zero ? 1 : 0;
+  mh.clip += d.peak > 0.98 ? 1 : 0;
+  if (++mh.n < 50) return;
+  let text = "";
+  if (mh.zero === mh.n) text = "Микрофон отдаёт цифровую тишину — проверьте устройство (или перезапустите браузер)";
+  else if (mh.clip >= 5) text = "Микрофон перегружен — убавьте уровень входа в системе";
+  $("micwarn").textContent = text;
+  mh.zero = mh.clip = mh.n = 0;
 }
 
 // ---- сеть ----------------------------------------------------------------

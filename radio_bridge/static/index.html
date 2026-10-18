@@ -47,6 +47,8 @@
   .timer { font-size: 22px; font-variant-numeric: tabular-nums; font-weight: 600; }
   .timer small { font-size: 13px; color: var(--muted); font-weight: 400; }
   #msg { min-height: 1.4em; color: var(--tx); font-size: 14px; }
+  .warn { color: var(--warn); font-size: 14px; }
+  .warn:empty { display: none; }
   select, input[type=range] { flex: 1; min-width: 0; font: inherit; }
   select { padding: 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }
   .hint { color: var(--muted); font-size: 12px; }
@@ -73,6 +75,7 @@
     <div class="row"><span class="label">Приём</span><div class="meter"><div id="rxbar"></div></div><span class="val" id="rxval">—</span></div>
     <div class="row"><span class="label">Микрофон</span><div class="meter"><div id="txbar"></div></div><span class="val" id="txval">—</span></div>
     <div id="msg"></div>
+    <div id="micwarn" class="warn"></div>
   </div>
 
   <div class="card" style="display:flex;flex-direction:column;gap:10px">

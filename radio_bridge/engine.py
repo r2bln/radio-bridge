@@ -92,7 +92,8 @@ class Engine:
         with self._lock:
             if self.tx_state not in (WAKE, VOICE):
                 return  # вне передачи голос клиента выбрасывается
-            frame = np.clip(ulaw.decode(data) * self._tx_gain, -1.0, 1.0)
+            # мягкий ограничитель: перегруженный микрофон клиента не уходит в эфир клиппингом
+            frame = np.tanh(ulaw.decode(data) * self._tx_gain).astype(np.float32)
             self._tx_level = dbfs(frame)
             self._voice.append(frame)
             self._last_voice = self._frame_no
