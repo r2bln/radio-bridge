@@ -55,7 +55,7 @@
   #ptt.sstv { background: var(--warn); color: #fff; border-color: var(--warn); }
   .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 8px; text-align: center; }
   .drop.over { border-color: var(--rx); }
-  .drop canvas { width: 100%; height: auto; border-radius: 6px; background: var(--meter-bg); display: block; }
+  .drop canvas { cursor: pointer; width: 100%; height: auto; border-radius: 6px; background: var(--meter-bg); display: block; }
   #drophint { color: var(--muted); font-size: 13px; margin-top: 6px; }
   .link { color: var(--rx); text-decoration: underline; cursor: pointer; }
   input#caption { padding: 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }
@@ -93,7 +93,7 @@
     </div>
     <div id="drop" class="drop">
       <canvas id="preview" width="320" height="240"></canvas>
-      <div id="drophint">Перетащите картинку, вставьте Ctrl+V или <label class="link">выберите файл<input type="file" id="file" accept="image/*" hidden></label></div>
+      <div id="drophint"><span id="droptext">Перетащите картинку, вставьте Ctrl+V или</span> <label class="link">выберите файл<input type="file" id="file" accept="image/*" hidden></label></div>
     </div>
     <div class="row"><span class="label">Подпись</span><input id="caption" maxlength="24" placeholder="позывной в углу" style="flex:1;min-width:0"></div>
     <div class="row">

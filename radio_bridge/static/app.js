@@ -279,7 +279,7 @@ function drawPreview() {
 function loadImage(blob) {
   if (!blob || !blob.type.startsWith("image/")) return;
   createImageBitmap(blob)
-    .then((b) => { st.img = b; $("drophint").hidden = true; drawPreview(); })
+    .then((b) => { st.img = b; $("droptext").textContent = "Другая картинка: Ctrl+V, перетащите или"; drawPreview(); })
     .catch(() => msg("Не удалось открыть картинку"));
 }
 
@@ -370,7 +370,8 @@ applyMicGain();
 $("caption").value = store.get("caption", "");
 $("caption").oninput = () => { store.set("caption", $("caption").value); drawPreview(); };
 $("sstvmode").onchange = () => { store.set("sstvmode", $("sstvmode").value); drawPreview(); };
-$("file").onchange = (e) => loadImage(e.target.files[0]);
+$("file").onchange = (e) => { loadImage(e.target.files[0]); e.target.value = ""; };  // сброс — чтобы тот же файл можно было выбрать снова
+$("preview").onclick = () => $("file").click();
 $("sstvsend").onclick = sendSstv;
 $("sstvstop").onclick = () => st.ws && st.ws.send(JSON.stringify({ type: "sstv_stop" }));
 document.addEventListener("paste", (e) => {
