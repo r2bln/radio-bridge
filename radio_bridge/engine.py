@@ -18,7 +18,8 @@ import numpy as np
 from . import FRAME, FRAME_MS, RATE, ulaw
 from .config import Config
 
-IDLE, WAKE, VOICE, LOCKED = "idle", "wake", "voice", "locked"
+IDLE, WAKE, VOICE, LOCKED, SSTV = "idle", "wake", "voice", "locked", "sstv"
+TX_ACTIVE = (WAKE, VOICE, SSTV)  # состояния, в которых на выход идёт сигнал
 SILENCE = np.zeros(FRAME, dtype=np.float32)
 LEVEL_EVERY = 5          # кадров между событиями level (≈10 раз/с)
 STATE_TICK = 50          # кадров между повторами state во время TX (1 с)
@@ -60,6 +61,8 @@ class Engine:
         self._tail = _frames(cfg.tx_tail_ms)
         self._tot = int(cfg.tx_tot_s * 1000 / FRAME_MS)
         self._tone = self._make_tone()
+        self._sstv: np.ndarray | None = None
+        self._sstv_mode = ""
 
         self.rx_open = False
         self._rx_gain = 10 ** (cfg.rx_gain_db / 20)
@@ -80,11 +83,33 @@ class Engine:
 
     def ptt_up(self) -> None:
         with self._lock:
+            if self.tx_state == SSTV:
+                return  # SSTV останавливается только явно (stop_sstv) или отключением клиента
             if self.tx_state in (WAKE, VOICE):
                 self._tail_until = self._frame_no + self._tail
             if self.tx_state != IDLE:
                 self._voice.clear()
                 self._set_tx(IDLE)
+
+    def start_sstv(self, samples: np.ndarray, mode: str) -> str | None:
+        """Запустить передачу картинки. Возвращает текст ошибки или None."""
+        with self._lock:
+            if self.tx_state != IDLE:
+                return "передатчик занят"
+            total = self._wake_frames + -(-len(samples) // FRAME)
+            if total >= self._tot:
+                return f"передача длиннее TOT ({self.cfg.tx_tot_s} с)"
+            pad = (-len(samples)) % FRAME
+            self._sstv = np.concatenate([samples, np.zeros(pad, dtype=np.float32)]).astype(np.float32)
+            self._sstv_mode = mode
+            self._tx_start = self._frame_no
+            self._set_tx(SSTV)
+            return None
+
+    def stop_sstv(self) -> None:
+        with self._lock:
+            if self.tx_state == SSTV:
+                self._end_sstv()
 
     def push_voice(self, data: bytes) -> None:
         if len(data) != FRAME:
@@ -101,6 +126,9 @@ class Engine:
     def client_gone(self) -> None:
         """Клиент отключился: передача прекращается немедленно."""
         with self._lock:
+            if self.tx_state == SSTV:
+                self._end_sstv()
+                return
             if self.tx_state in (WAKE, VOICE):
                 self._tail_until = self._frame_no + self._tail
             self._voice.clear()
@@ -123,10 +151,10 @@ class Engine:
             out = self._tx_step()
             self._rx_step(np.asarray(rx, dtype=np.float32))
             if self._frame_no % LEVEL_EVERY == 0:
-                tx_db = self._tx_level if self.tx_state in (WAKE, VOICE) else -120.0
+                tx_db = self._tx_level if self.tx_state in TX_ACTIVE else -120.0
                 self._emit("level", {"rx_dbfs": round(self._rx_level, 1), "tx_dbfs": round(tx_db, 1)})
             elapsed = self._frame_no - self._tx_start
-            if self.tx_state in (WAKE, VOICE, LOCKED) and elapsed > 0 and elapsed % STATE_TICK == 0:
+            if self.tx_state != IDLE and elapsed > 0 and elapsed % STATE_TICK == 0:
                 self._emit_state()
             self._frame_no += 1
             return out
@@ -138,6 +166,8 @@ class Engine:
         if st in (IDLE, LOCKED):
             return SILENCE
         elapsed = self._frame_no - self._tx_start
+        if st == SSTV:
+            return self._sstv_step(elapsed)
         if elapsed >= self._tot:
             self._lockout()
             self._emit("tot_expired", {"tot_s": self.cfg.tx_tot_s})
@@ -151,6 +181,26 @@ class Engine:
             self._set_tx(VOICE)
         return self._voice.popleft() if self._voice else SILENCE
 
+    def _sstv_step(self, elapsed: int) -> np.ndarray:
+        if elapsed >= self._tot:  # страховка: длину проверяем на старте, но TOT — закон
+            self._end_sstv()
+            self._emit("tot_expired", {"tot_s": self.cfg.tx_tot_s})
+            return SILENCE
+        if elapsed < self._wake_frames:
+            return self._tone[elapsed]
+        i = (elapsed - self._wake_frames) * FRAME
+        if i >= len(self._sstv):
+            self._end_sstv()
+            return SILENCE
+        frame = self._sstv[i:i + FRAME]
+        self._tx_level = dbfs(frame)
+        return frame
+
+    def _end_sstv(self) -> None:
+        self._sstv = None
+        self._tail_until = self._frame_no + self._tail
+        self._set_tx(IDLE)
+
     def _lockout(self) -> None:
         self._voice.clear()
         self._tail_until = self._frame_no + self._tail
@@ -158,7 +208,7 @@ class Engine:
 
     def _rx_step(self, rx: np.ndarray) -> None:
         self._rx_level = dbfs(rx)
-        suppressed = self.tx_state in (WAKE, VOICE) or self._frame_no < self._tail_until
+        suppressed = self.tx_state in TX_ACTIVE or self._frame_no < self._tail_until
         if suppressed:
             self._preroll.clear()
             if self.rx_open:
@@ -196,14 +246,18 @@ class Engine:
     def _set_tx(self, st: str) -> None:
         if st != self.tx_state:
             self.tx_state = st
-            if st not in (WAKE, VOICE):
+            if st not in TX_ACTIVE:
                 self._tx_level = -120.0
             self._emit_state()
 
     def _state_dict(self) -> dict:
-        active = self.tx_state in (WAKE, VOICE, LOCKED)
+        active = self.tx_state != IDLE
         elapsed = (self._frame_no - self._tx_start) * FRAME_MS / 1000 if active else 0.0
-        return {"tx": self.tx_state, "tx_elapsed_s": round(elapsed, 2), "rx_open": self.rx_open}
+        d = {"tx": self.tx_state, "tx_elapsed_s": round(elapsed, 2), "rx_open": self.rx_open}
+        if self.tx_state == SSTV and self._sstv is not None:
+            d["sstv"] = {"mode": self._sstv_mode,
+                         "total_s": round((self._wake_frames * FRAME + len(self._sstv)) / RATE, 1)}
+        return d
 
     def _emit_state(self) -> None:
         self._emit("state", self._state_dict())

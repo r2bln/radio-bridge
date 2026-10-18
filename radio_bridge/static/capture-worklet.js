@@ -1,5 +1,6 @@
 // Микрофон → ФВЧ 250 Гц → ФНЧ 3,4 кГц → ресемплинг до 8 кГц → кадры μ-law по 160 байт.
 // ФВЧ режет гул, удары по корпусу и дыхание — радиоголосу ниже 300 Гц делать нечего.
+// Затем усиление из настроек клиента и мягкий ограничитель (tanh), чтобы громкое не хрипело.
 // В main thread уходят все кадры (для индикатора); слать ли их в сеть — решает app.js.
 
 const OUT_RATE = 8000;
@@ -44,6 +45,8 @@ class Capture extends AudioWorkletProcessor {
     this.hp = biquadHighpass(250, sampleRate, 0.7071);
     this.peak = 0;    // пик сырого входа за кадр — для индикатора перегруза
     this.raw = 0;     // сумма |x| сырого входа — цифровая тишина = ровно 0
+    this.gain = 1;
+    this.port.onmessage = (e) => { if (e.data.gain !== undefined) this.gain = e.data.gain; };
     this.step = sampleRate / OUT_RATE;
     this.pos = 0;
     this.prev = 0;
@@ -62,7 +65,7 @@ class Capture extends AudioWorkletProcessor {
       const cur = run(this.f2, run(this.f1, run(this.hp, ch[i])));
       // выходные отсчёты, попадающие между prev (t=-1) и cur (t=0)
       while (this.pos <= 1) {
-        const v = this.prev + (cur - this.prev) * this.pos;
+        const v = Math.tanh((this.prev + (cur - this.prev) * this.pos) * this.gain);
         this.frame[this.n++] = ulawEncode(v);
         this.sq += v * v;
         if (this.n === FRAME) {

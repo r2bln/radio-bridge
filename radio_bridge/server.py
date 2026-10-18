@@ -1,12 +1,15 @@
 """HTTP(S) + WebSocket: отдаёт страницу клиента и гоняет звук/PTT (протокол — docs/SPEC.md §6)."""
 import asyncio
+import base64
+import binascii
 import json
 import logging
 from pathlib import Path
 
+import numpy as np
 from aiohttp import WSCloseCode, WSMsgType, web
 
-from . import FRAME, FRAME_MS, PROTOCOL_VERSION, RATE, __version__
+from . import FRAME, FRAME_MS, PROTOCOL_VERSION, RATE, __version__, sstv
 from .audio import make_backend
 from .config import Config
 from .engine import Engine
@@ -56,7 +59,7 @@ HUB = web.AppKey("hub", Hub)
 async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     app = request.app
     hub, engine, cfg = app[HUB], app[ENGINE], app[CONFIG]
-    ws = web.WebSocketResponse(heartbeat=5.0, max_msg_size=64 * 1024)
+    ws = web.WebSocketResponse(heartbeat=5.0, max_msg_size=2 * 1024 * 1024)  # картинка SSTV ~330 КБ
     await ws.prepare(request)
     peer = request.remote
     if hub.ws is not None and not hub.ws.closed:
@@ -69,6 +72,8 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     await ws.send_str(json.dumps({
         "type": "hello", "version": PROTOCOL_VERSION, "server": __version__,
         "tot_s": cfg.tx_tot_s, "rate": RATE, "frame_ms": FRAME_MS,
+        "sstv_modes": [{"name": m.name, "title": m.title, "width": m.width, "height": m.height}
+                       for m in sstv.MODES.values()],
     }))
     await ws.send_str(json.dumps({"type": "state", **engine.snapshot()}))
     try:
@@ -81,11 +86,18 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                     data = json.loads(msg.data)
                 except ValueError:
                     continue
-                if data.get("type") == "ptt":
+                kind = data.get("type")
+                if kind == "ptt":
                     if data.get("state") == "down":
                         engine.ptt_down()
                     elif data.get("state") == "up":
                         engine.ptt_up()
+                elif kind == "sstv":
+                    err = await start_sstv(engine, cfg, data)
+                    if err:
+                        await ws.send_str(json.dumps({"type": "error", "code": "sstv", "message": err}))
+                elif kind == "sstv_stop":
+                    engine.stop_sstv()
             elif msg.type == WSMsgType.ERROR:
                 log.warning("ws ошибка: %s", ws.exception())
     finally:
@@ -94,6 +106,24 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
             hub.ws = None
         log.info("клиент отключился: %s", peer)
     return ws
+
+
+async def start_sstv(engine: Engine, cfg: Config, data: dict) -> str | None:
+    mode = sstv.MODES.get(data.get("mode", ""))
+    if mode is None:
+        return "неизвестный режим SSTV"
+    try:
+        raw = base64.b64decode(data.get("rgb", ""), validate=True)
+    except (binascii.Error, ValueError):
+        return "картинка повреждена"
+    if len(raw) != mode.width * mode.height * 3:
+        return f"{mode.title}: нужна картинка {mode.width}×{mode.height}"
+    rgb = np.frombuffer(raw, dtype=np.uint8).reshape(mode.height, mode.width, 3)
+    samples = await asyncio.to_thread(sstv.encode, mode.name, rgb, cfg.sstv_dbfs)
+    err = engine.start_sstv(samples, mode.name)
+    if err is None:
+        log.info("SSTV %s: %.1f с", mode.title, len(samples) / RATE)
+    return err
 
 
 async def index(request: web.Request) -> web.FileResponse:

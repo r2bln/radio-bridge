@@ -2,6 +2,7 @@ import asyncio
 import json
 
 import aiohttp
+import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
 from radio_bridge import ulaw
@@ -13,8 +14,8 @@ def run(coro):
     return asyncio.run(coro)
 
 
-async def _client(tmp_path):
-    cfg = Config(audio_device="fake", tls=False, data_dir=tmp_path, tx_tot_s=5, vox_tone_ms=100)
+async def _client(tmp_path, **kw):
+    cfg = Config(**{"audio_device": "fake", "tls": False, "data_dir": tmp_path, "tx_tot_s": 5, "vox_tone_ms": 100, **kw})
     client = TestClient(TestServer(build_app(cfg)))
     await client.start_server()
     return client
@@ -102,6 +103,35 @@ def test_disconnect_during_tx_releases(tmp_path):
             await asyncio.sleep(0.1)
             from radio_bridge.server import ENGINE
             assert c.server.app[ENGINE].tx_state == "idle"
+        finally:
+            await c.close()
+    run(go())
+
+
+def test_sstv_over_ws(tmp_path):
+    async def go():
+        import base64
+        import numpy as np
+        c = await _client(tmp_path, tx_tot_s=180, vox_tone_ms=500)
+        try:
+            ws = await c.ws_connect("/ws")
+            hello = await _recv_json(ws, "hello")
+            assert {m["name"] for m in hello["sstv_modes"]} == {"robot36", "martin1", "scottie1"}
+            await ws.send_str(json.dumps({"type": "sstv", "mode": "robot36", "rgb": base64.b64encode(b"x" * 10).decode()}))
+            assert "320×240" in (await _recv_json(ws, "error"))["message"]
+            rgb = np.random.default_rng(0).integers(0, 255, (240, 320, 3), dtype=np.uint8).tobytes()
+            await ws.send_str(json.dumps({"type": "sstv", "mode": "robot36", "rgb": base64.b64encode(rgb).decode()}))
+            st = await _recv_json(ws, "state")
+            while st["tx"] != "sstv":
+                st = await _recv_json(ws, "state")
+            assert st["sstv"]["mode"] == "robot36" and st["sstv"]["total_s"] == pytest.approx(37.7, abs=0.1)
+            await ws.send_str(json.dumps({"type": "ptt", "state": "down"}))  # во время SSTV игнорируется
+            await asyncio.sleep(0.3)
+            await ws.send_str(json.dumps({"type": "sstv_stop"}))
+            st = await _recv_json(ws, "state")
+            while st["tx"] != "idle":
+                st = await _recv_json(ws, "state")
+            await ws.close()
         finally:
             await c.close()
     run(go())

@@ -17,7 +17,8 @@ case "${1:-status}" in
     pactl set-source-port "$IN" analog-input-headset-mic
     pactl set-source-volume "$IN" 10%
     [ "${2:-}" = dry ] && DRY=1 || DRY=0
-    AUDIO_DEVICE="sd:$IN,$OUT" TX_DRY_RUN=$DRY LISTEN=100.64.0.42:8443 TLS_SAN=tvbox,100.64.0.42 \
+    # тон VOX и SSTV громче голоса: на этом пути (PortAudio → PipeWire) −12 dBFS едва будит VOX
+    VOX_TONE_DBFS=-6 SSTV_DBFS=-6 AUDIO_DEVICE="sd:$IN,$OUT" TX_DRY_RUN=$DRY LISTEN=100.64.0.42:8443 TLS_SAN=tvbox,100.64.0.42 \
       DATA_DIR="$PWD/data" setsid nohup .venv/bin/python -m radio_bridge > server.log 2>&1 < /dev/null &
     sleep 3
     grep -v aiohttp.access server.log

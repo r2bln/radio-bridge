@@ -35,6 +35,7 @@ class Config:
     tx_tot_s: int = 180
     tx_max_buffer_ms: int = 1000
     tx_dry_run: bool = False
+    sstv_dbfs: float = -12.0
 
     @classmethod
     def from_env(cls) -> "Config":

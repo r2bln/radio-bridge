@@ -52,6 +52,14 @@
   select, input[type=range] { flex: 1; min-width: 0; font: inherit; }
   select { padding: 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }
   .hint { color: var(--muted); font-size: 12px; }
+  #ptt.sstv { background: var(--warn); color: #fff; border-color: var(--warn); }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 8px; text-align: center; }
+  .drop.over { border-color: var(--rx); }
+  .drop canvas { width: 100%; height: auto; border-radius: 6px; background: var(--meter-bg); display: block; }
+  #drophint { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .link { color: var(--rx); text-decoration: underline; cursor: pointer; }
+  input#caption { padding: 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }
+  button.danger { color: var(--tx); border-color: var(--tx); }
 </style>
 </head>
 <body>
@@ -78,8 +86,26 @@
     <div id="micwarn" class="warn"></div>
   </div>
 
+  <div class="card" id="sstvcard" style="display:flex;flex-direction:column;gap:10px">
+    <div class="row" style="justify-content:space-between">
+      <strong>SSTV</strong>
+      <select id="sstvmode" style="flex:0 1 auto"></select>
+    </div>
+    <div id="drop" class="drop">
+      <canvas id="preview" width="320" height="240"></canvas>
+      <div id="drophint">Перетащите картинку, вставьте Ctrl+V или <label class="link">выберите файл<input type="file" id="file" accept="image/*" hidden></label></div>
+    </div>
+    <div class="row"><span class="label">Подпись</span><input id="caption" maxlength="24" placeholder="позывной в углу" style="flex:1;min-width:0"></div>
+    <div class="row">
+      <button id="sstvsend" disabled style="flex:1">Отправить в эфир</button>
+      <button id="sstvstop" hidden>Стоп</button>
+    </div>
+    <div class="meter" id="sstvprog" hidden><div id="sstvbar" style="background:var(--warn)"></div></div>
+  </div>
+
   <div class="card" style="display:flex;flex-direction:column;gap:10px">
     <div class="row"><span class="label">Громкость</span><input type="range" id="vol" min="0" max="2" step="0.05" value="1"></div>
+    <div class="row"><span class="label">Усиление</span><input type="range" id="micgain" min="0" max="24" step="1" value="0"><span class="val" id="micgainval">+0 dB</span></div>
     <div class="row"><span class="label">Микрофон</span><select id="mic"><option value="">по умолчанию</option></select></div>
     <div class="hint">PTT — держать кнопку или Пробел. Сертификат самоподписанный: при первом входе браузер
       попросит подтвердить переход.</div>
