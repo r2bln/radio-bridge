@@ -1,0 +1,13 @@
+# http://radio-bridge.ts.0x1b.cc/ → https:// (микрофон в браузере только в secure context)
+[Unit]
+Description=radio-bridge: редирект http → https
+After=tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+ExecStart=/root/radio-bridge/.venv/bin/python /root/radio-bridge/dev/http_redirect.py 100.64.0.52 80
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+# radio-bridge на хосте radio-bridge (Repka Pi, 192.168.1.23): https://radio-bridge.ts.0x1b.cc/
+# Ставится: ln -sf /root/radio-bridge/dev/radio-bridge*.service /etc/systemd/system/ && systemctl enable --now radio-bridge radio-bridge-redirect
+# Слушает только tailnet; до подъёма tailscale0 бинд падает — Restart добивает.
+[Unit]
+Description=radio-bridge (браузер ⇄ станция)
+After=tailscaled.service sound.target
+Wants=tailscaled.service
+
+[Service]
+WorkingDirectory=/root/radio-bridge
+# подстрока имени устройства PortAudio (`.venv/bin/python -m sounddevice`)
+Environment=AUDIO_DEVICE=sd:H3 Audio Codec
+# у кодека нет 8 кГц — ресемплинг отдаём ALSA
+Environment=PA_ALSA_PLUGHW=1
+# 1 — в рацию идёт только тишина, TX пишется в data/
+Environment=TX_DRY_RUN=1
+Environment=VOX_TONE_DBFS=-6 SSTV_DBFS=-6
+Environment=LISTEN=100.64.0.52:443 TLS_SAN=radio-bridge,radio-bridge.ts.0x1b.cc,100.64.0.52
+Environment=DATA_DIR=/root/radio-bridge/data
+ExecStart=/root/radio-bridge/.venv/bin/python -m radio_bridge
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
