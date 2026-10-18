@@ -17,6 +17,10 @@ Environment=TX_DRY_RUN=1
 Environment=VOX_TONE_DBFS=-6 SSTV_DBFS=-6
 Environment=LISTEN=100.64.0.52:443 TLS_SAN=radio-bridge,radio-bridge.ts.0x1b.cc,100.64.0.52
 Environment=DATA_DIR=/root/radio-bridge/data
+# По умолчанию у кодека H3 все входы с Capture [off] — DAPM не включает АЦП, захват стоит
+# (arecord: I/O error, PortAudio: input underflow в каждом кадре). Вход — Mic1, без усилителя.
+ExecStartPre=/usr/bin/amixer -c 0 -q sset Mic1 cap
+ExecStartPre=/usr/bin/amixer -c 0 -q sset "Mic1 Boost" 0
 ExecStart=/root/radio-bridge/.venv/bin/python -m radio_bridge
 Restart=always
 RestartSec=5
