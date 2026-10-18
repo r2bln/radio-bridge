@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>radio-bridge</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --fg: #1d2129; --muted: #6b7280; --line: #e3e5e9;
+    --rx: #1f9d55; --tx: #d64545; --warn: #c27c0e; --idle: #9aa1ab; --meter-bg: #e9ebef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121418; --card: #1b1e24; --fg: #e6e8eb; --muted: #9aa1ab; --line: #2a2e36;
+      --rx: #3cc47c; --tx: #ff6464; --warn: #f0a83a; --idle: #5b626d; --meter-bg: #262a31;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 480px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  h1 { font-size: 17px; margin: 0; }
+  .status { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--idle); }
+  .dot.on { background: var(--rx); }
+  .dot.err { background: var(--tx); }
+  button { font: inherit; border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+           color: var(--fg); padding: 8px 14px; cursor: pointer; }
+  #ptt { width: 100%; height: 34vh; min-height: 180px; max-height: 300px; border-radius: 18px;
+         font-size: 28px; font-weight: 700; letter-spacing: .04em; border: 2px solid var(--line);
+         user-select: none; -webkit-user-select: none; touch-action: none; transition: background .08s; }
+  #ptt:disabled { opacity: .45; cursor: not-allowed; }
+  #ptt.wake { background: var(--warn); color: #fff; border-color: var(--warn); }
+  #ptt.voice { background: var(--tx); color: #fff; border-color: var(--tx); }
+  #ptt.locked { background: var(--meter-bg); color: var(--tx); border-color: var(--tx); }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .label { width: 64px; color: var(--muted); font-size: 13px; }
+  .meter { flex: 1; height: 12px; background: var(--meter-bg); border-radius: 6px; overflow: hidden; }
+  .meter > div { height: 100%; width: 0; border-radius: 6px; transition: width .06s linear; }
+  #rxbar { background: var(--rx); }
+  #txbar { background: var(--tx); }
+  .val { width: 64px; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--meter-bg); color: var(--muted); }
+  .badge.rx { background: var(--rx); color: #fff; }
+  .timer { font-size: 22px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .timer small { font-size: 13px; color: var(--muted); font-weight: 400; }
+  #msg { min-height: 1.4em; color: var(--tx); font-size: 14px; }
+  select, input[type=range] { flex: 1; min-width: 0; font: inherit; }
+  select { padding: 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+  .hint { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <header>
+      <h1>radio-bridge</h1>
+      <div class="status"><span class="dot" id="dot"></span><span id="conn">не подключено</span></div>
+    </header>
+  </div>
+
+  <button id="connect">Подключиться</button>
+
+  <button id="ptt" disabled>PTT</button>
+
+  <div class="card" style="display:flex;flex-direction:column;gap:10px">
+    <div class="row" style="justify-content:space-between">
+      <div class="timer" id="timer">0:00 <small>/ 3:00</small></div>
+      <span class="badge" id="rxbadge">приём: тишина</span>
+    </div>
+    <div class="row"><span class="label">Приём</span><div class="meter"><div id="rxbar"></div></div><span class="val" id="rxval">—</span></div>
+    <div class="row"><span class="label">Микрофон</span><div class="meter"><div id="txbar"></div></div><span class="val" id="txval">—</span></div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="card" style="display:flex;flex-direction:column;gap:10px">
+    <div class="row"><span class="label">Громкость</span><input type="range" id="vol" min="0" max="2" step="0.05" value="1"></div>
+    <div class="row"><span class="label">Микрофон</span><select id="mic"><option value="">по умолчанию</option></select></div>
+    <div class="hint">PTT — держать кнопку или Пробел. Сертификат самоподписанный: при первом входе браузер
+      попросит подтвердить переход.</div>
+  </div>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

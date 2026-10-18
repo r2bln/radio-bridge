@@ -33,8 +33,8 @@ PTT-линии нет: в эфир станцию выводит только з
 Один репозиторий, один процесс на сервере, клиент — статическая страница, которую
 отдаёт этот же сервер.
 
-- `server/` — Python 3.12+, `aiohttp` (HTTPS, статика, WebSocket), `sounddevice` (PortAudio → ALSA), `numpy`.
-- `web/` — `index.html`, `app.js`, AudioWorklet-процессоры захвата и воспроизведения. Без сборщика и фреймворков.
+- `radio_bridge/` — Python 3.12+, `aiohttp` (HTTPS, статика, WebSocket), `sounddevice` (PortAudio → ALSA/Pulse), `numpy`: `engine.py` — автомат TX и гейт RX (чистая логика, время в кадрах), `audio.py` — бэкенды, `server.py` — HTTP/WS, `ulaw.py`, `tls.py`.
+- `radio_bridge/static/` — `index.html`, `app.js`, AudioWorklet-процессоры захвата и воспроизведения. Без сборщика и фреймворков.
 - `Dockerfile` — образ сервера. Хостовая конфигурация и деплой — в репо `infra` (`stacks/radio-bridge`, `hosts/taranai/radio-bridge`), код подключается сабмодулем, как MeteoDumb.
 
 ## 3. Аудио
